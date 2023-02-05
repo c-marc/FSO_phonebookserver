@@ -2,11 +2,12 @@ const express = require("express");
 const app = express();
 
 const morgan = require("morgan");
-const logger = morgan("tiny");
+const cors = require("cors");
 
 //
 app.use(express.json());
-app.use(logger);
+app.use(morgan("tiny"));
+app.use(cors());
 
 let persons = [
   {
