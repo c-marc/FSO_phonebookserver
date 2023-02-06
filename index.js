@@ -84,19 +84,14 @@ app.delete("/api/persons/:id", (request, response, next) => {
 });
 
 // Add
-app.post("/api/persons", (request, response) => {
+app.post("/api/persons", (request, response, next) => {
   const body = request.body;
 
-  if (body.name === undefined || body.number === undefined) {
-    return response.status(400).json({
-      error: "both name and number are required",
-    });
-  }
-
   /*
-  if (persons.some((p) => p.name.toLowerCase() === body.name.toLowerCase())) {
-    return response.status(400).json({
-      error: "name must be unique",
+  // This is now dealt with mongoose validation of the schema
+  if (body.name === undefined || body.number === undefined) {
+    return response.status(400).json({ // 400 bad request
+      error: "both name and number are required",
     });
   }
   */
@@ -107,9 +102,22 @@ app.post("/api/persons", (request, response) => {
     number: body.number,
   });
 
-  // respond in the callback = after success
-  person.save().then((savedPerson) => {
-    response.json(savedPerson);
+  // The frontend prevents this situation
+  Person.find({ name: person.name }).then((persons) => {
+    console.log(persons);
+    if (persons.length) {
+      return response.status(400).json({
+        error: "name must be unique",
+      });
+    } else {
+      // respond in the callback = after success
+      person
+        .save()
+        .then((savedPerson) => {
+          response.json(savedPerson);
+        })
+        .catch((error) => next(error)); //validation error to the errorHandler middlewre
+    }
   });
 });
 
@@ -122,7 +130,11 @@ app.put("/api/persons/:id", (request, response, next) => {
     number: body.number,
   };
 
-  Person.findByIdAndUpdate(request.params.id, person, { new: true })
+  Person.findByIdAndUpdate(request.params.id, person, {
+    new: true, // by default the reponse (updatedPerson) would be the entry before modif
+    runValidators: true, // validation must be required explicitely
+    context: "query",
+  })
     .then((updatedPerson) => {
       response.json(updatedPerson);
     })
@@ -142,6 +154,8 @@ const errorHandler = (error, request, response, next) => {
 
   if (error.name === "CastError") {
     return response.status(400).send({ error: "malformatted id" }); //400 bad request
+  } else if (error.name === "ValidationError") {
+    return response.status(400).json({ error: error.message });
   }
 
   next(error);
